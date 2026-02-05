@@ -1,10 +1,8 @@
-#include "common/logger/Logger.h"
-#include "common/logger/Logger.h"
 #include "server/Server.h"
+#include "common/logger/Logger.h"
 #include "common/config/Config.h"
 
 #include <csignal>
-#include <spdlog/spdlog.h>
 
 using namespace config;
 
@@ -41,14 +39,25 @@ int main(int argc, char* argv[]) {
 
     auto config_path = parseConfigPath(argc, argv);
     LOG_INFO("using config file: {}", config_path);
-
     if (!config::Config::instance().loadFromFile(config_path)) {
         LOG_ERROR("failed to load config, exit");
         return 1;
     }
 
     server::Server server;
-    server.start();
-    server.wait();
+    g_server = &server;
+    // 注册信号
+    std::signal(SIGINT, handleSignal);
+    std::signal(SIGTERM, handleSignal);
+
+    if (!server.start()) {
+        LOG_ERROR("server start failed");
+        return -1;
+    }
+
+    LOG_INFO("server started");
+
+    server.wait();   // 阻塞在 acceptLoop / join
+    LOG_INFO("server stopped");
     return 0;
 }

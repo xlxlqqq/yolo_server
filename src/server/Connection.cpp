@@ -1,5 +1,6 @@
 #include "server/Connection.h"
 #include "common/logger/Logger.h"
+#include "server/Protocol.h"
 
 #include <unistd.h>
 #include <sys/socket.h>
@@ -20,26 +21,22 @@ void Connection::start() {
 }
 
 void Connection::handle() {
-    sockaddr_in peer{};
-    socklen_t len = sizeof(peer);
-    getpeername(m_fd, (sockaddr*)&peer, &len);
+    LOG_INFO("client connected");
 
-    char ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
-    int port = ntohs(peer.sin_port);
-
-    LOG_INFO("client connected: {}:{}", ip, port);
-
-    char buffer[1024];
     while (true) {
-        ssize_t n = recv(m_fd, buffer, sizeof(buffer), 0);
-        if (n <= 0) {
+        std::vector<char> msg;
+        if (!server::Protocol::recvMessage(m_fd, msg)) {
             break;
         }
-        send(m_fd, buffer, n, 0);  // echo
+
+        // 👉 这里以后接 YOLO / JSON / 命令
+        LOG_INFO("received message size={}", msg.size());
+
+        // echo 回去（完整消息）
+        server::Protocol::sendMessage(m_fd, msg);
     }
 
-    LOG_INFO("client disconnected: {}:{}", ip, port);
+    LOG_INFO("client disconnected");
 }
 
 };
