@@ -20,7 +20,9 @@ add_subdirectory(third_party/spdlog)
 
 add_executable(storage_server
     src/main.cpp
+    src/server/Server.cpp
     src/common/logger/Logger.cpp
+    src/common/config/Config.cpp
 )
 
 # =========================
@@ -28,7 +30,9 @@ add_executable(storage_server
 # =========================
 set(SERVER_SOURCES
     src/main.cpp
+    src/server/Server.cpp
     src/common/logger/Logger.cpp
+    src/common/config/Config.cpp
 )
 
 # =========================
