@@ -25,13 +25,10 @@ void handleSignal(int sig) {
 int main() {
     // TODO: 异步日志增加性能
 
-    Config::instance().set("server.port", "8080");
-    Config::instance().set("log.debug", "true");
+    config::Config::instance().loadFromFile("../config/server.conf");
 
-    int port = Config::instance().getInt("server.port", 80);
-    bool debug = Config::instance().getBool("log.debug", false);
-    LOG_INFO("server port: {}", port);
-    LOG_INFO("log debug: {}", debug);
+    int port = config::Config::instance().getInt("server.port", 8080);
+    LOG_INFO("server will listen on port {}", port);
     
     logger::Logger::instance().init(
         "logs/server.log",

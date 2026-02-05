@@ -18,6 +18,9 @@ public:
     int getInt(const std::string& key, int defaultValue = 0) const;
     bool getBool(const std::string& key, bool defaultValue = false) const;
 
+    // 从配置文件加载配置
+    bool loadFromFile(const std::string& path);
+
 private:
     Config() = default;
     ~Config() = default;
