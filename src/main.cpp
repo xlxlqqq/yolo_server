@@ -4,7 +4,6 @@
 #include "common/config/Config.h"
 
 #include <csignal>
-
 #include <spdlog/spdlog.h>
 
 using namespace config;
@@ -21,36 +20,35 @@ void handleSignal(int sig) {
     }
 }
 
+// 命令行参数解析
+std::string parseConfigPath(int argc, char* argv[]) {
+    std::string config_path = "./config/server.conf"; // 默认
 
-int main() {
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--config" && i + 1 < argc) {
+            config_path = argv[i + 1];
+            break;
+        }
+    }
+
+    return config_path;
+}
+
+
+int main(int argc, char* argv[]) {
     // TODO: 异步日志增加性能
 
-    config::Config::instance().loadFromFile("../config/server.conf");
+    auto config_path = parseConfigPath(argc, argv);
+    LOG_INFO("using config file: {}", config_path);
 
-    int port = config::Config::instance().getInt("server.port", 8080);
-    LOG_INFO("server will listen on port {}", port);
-    
-    logger::Logger::instance().init(
-        "logs/server.log",
-        logger::LogLevel::DEBUG
-    );
-
-    server::Server server;
-    g_server = &server;
-
-    std::signal(SIGINT, handleSignal);
-    std::signal(SIGTERM, handleSignal);
-
-    if (!server.init()) {
-        LOG_ERROR("server init failed");
+    if (!config::Config::instance().loadFromFile(config_path)) {
+        LOG_ERROR("failed to load config, exit");
         return 1;
     }
 
+    server::Server server;
     server.start();
     server.wait();
-
-    
-
-    LOG_INFO("server exit");
     return 0;
 }

@@ -10,14 +10,20 @@ public:
     ~Server();
 
     bool init();
-    void start();
+    bool start();
     void stop();
     void wait();
 
     bool isRunning() const;
 
 private:
-    std::atomic<bool> running_;
+    std::atomic<bool> m_running;
+
+    bool setupSocket();
+    void acceptLoop();
+
+    int m_listen_fd{-1};
+    int m_port{9000};
 };
 
 };  // namespace server
