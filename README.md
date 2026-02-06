@@ -1,4 +1,8 @@
 
+### TODO
+分布式存储
+分布一致性
+接入数据库存储
 
 # 日志系统
 - 支持fmt
@@ -37,13 +41,14 @@ Server
                           └── recv/send/close
 
 ### store Payload
+实现store接口和get接口，目前还是内存存储
 {
   "image_id": "img_0001",
   "width": 1920,
   "height": 1080,
   "image_hash": "a1b2c3d4...",
   "boxes": [
-    { "cls": 0, "x": 0.52, "y": 0.33, "w": 0.12, "h": 0.18, "conf": 0.94 },
-    { "cls": 2, "x": 0.22, "y": 0.61, "w": 0.08, "h": 0.10, "conf": 0.88 }
+    { "class_id": 0, "x": 0.52, "y": 0.33, "w": 0.12, "h": 0.18, "confidence": 0.94 },
+    { "class_id": 2, "x": 0.22, "y": 0.61, "w": 0.08, "h": 0.10, "confidence": 0.88 }
   ]
 }
