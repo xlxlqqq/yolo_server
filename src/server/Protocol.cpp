@@ -1,4 +1,5 @@
 #include "server/Protocol.h"
+#include "common/logger/Logger.h"
 
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -18,16 +19,28 @@ static bool recvAll(int fd, void* buf, size_t len) {
 }
 
 bool Protocol::recvMessage(int fd, std::vector<char>& out) {
-    uint32_t len_net;
-    ssize_t n = recv(fd, &len_net, sizeof(len_net), MSG_WAITALL);
-    if (n <= 0) return false;
+    uint32_t len = 0;
+    
+    // 先收一个长度
+    ssize_t n = recv(fd, &len, sizeof(len), MSG_WAITALL);
+    if (n <= 0) {
+        return false;
+    }
 
-    uint32_t len = ntohl(len_net);
-    if (len == 0 || len > 1024 * 1024) return false; // 防御式编程
+    len = ntohl(len);
+    if (len == 0 || len > MAX_MESSAGE_SIZE) {
+        LOG_WARN("invalid message size: {}", len);
+        return false;  // 无效的消息长度
+    }
 
     out.resize(len);
-    n = recv(fd, out.data(), len, MSG_WAITALL);
-    return n == (ssize_t)len;
+    
+    n = recv(fd, out.data(), len, MSG_WAITALL);  // 真正的消息体
+    if (n <= 0) {
+        return false;
+    }
+
+    return true;
 }
 
 bool Protocol::sendMessage(int fd, const std::vector<char>& data) {

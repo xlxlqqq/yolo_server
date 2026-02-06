@@ -7,6 +7,8 @@ namespace server {
 
 class Protocol {
 public:
+    static constexpr uint32_t MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB
+
     // 从 socket 读取一条完整消息
     static bool recvMessage(int fd, std::vector<char>& out);
 

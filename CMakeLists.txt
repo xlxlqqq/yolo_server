@@ -9,7 +9,7 @@ project(storage_server
 # =========================
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_EXTENSIONS OFF)   
 
 # Debug / Release 区分
 if(NOT CMAKE_BUILD_TYPE)
@@ -26,6 +26,7 @@ add_executable(storage_server
     src/server/Connection.cpp
     src/server/Protocol.cpp
     src/server/Dispatcher.cpp
+    src/server/Command.cpp
 )
 
 # =========================
@@ -39,6 +40,7 @@ set(SERVER_SOURCES
     src/server/Connection.cpp
     src/server/Protocol.cpp
     src/server/Dispatcher.cpp
+    src/server/Command.cpp
 )
 
 # =========================
@@ -49,6 +51,9 @@ target_include_directories(storage_server
         ${PROJECT_SOURCE_DIR}/src
         ${PROJECT_SOURCE_DIR}/third_party/spdlog/include
 )
+
+include_directories(${PROJECT_SOURCE_DIR}/third_party)
+
 
 # =========================
 # 链接库

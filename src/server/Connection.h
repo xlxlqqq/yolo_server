@@ -1,6 +1,7 @@
 #pragma once
 
 #include <netinet/in.h>
+#include <string>
 
 namespace server {
 
@@ -13,6 +14,11 @@ public:
 
 private:
     void handle();
+
+    void handlePing();
+    void handleUnknown(const std::string& msg);
+    void handleStore(const std::string& msg);
+    void handleGet(const std::string& msg);
 
 private:
     int m_fd;

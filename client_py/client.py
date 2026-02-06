@@ -21,8 +21,9 @@ print(reply.decode())
 send_msg(sock, b'{"cmd":"ping"}')
 print(recv_msg(sock).decode())
 
-send_msg(sock, b'{cmd: ping}')
+send_msg(sock, b'PING')
 print(recv_msg(sock).decode())
 
-send_msg(sock, b'{}')
+send_msg(sock, b'STORE test 5 \n')
 print(recv_msg(sock).decode())
+
