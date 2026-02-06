@@ -5,18 +5,18 @@ def send_msg(sock, data: bytes):
     sock.sendall(struct.pack("!I", len(data)) + data)
 
 def recv_msg(sock):
-    raw_len = sock.recv(4)
-    if not raw_len:
+    hdr = sock.recv(4)
+    if not hdr:
         return None
-    length = struct.unpack("!I", raw_len)[0]
+    length = struct.unpack("!I", hdr)[0]
     return sock.recv(length)
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.connect(("127.0.0.1", 8080))   # 端口换成你的
+sock = socket.socket()
+sock.connect(("127.0.0.1", 8080))
 
 send_msg(sock, b"hello server")
-resp = recv_msg(sock)
+reply = recv_msg(sock)
+print(reply.decode())
 
-print("server replied:", resp)
-
-sock.close()
+send_msg(sock, b'{"cmd":"ping"}')
+print(recv_msg(sock).decode())

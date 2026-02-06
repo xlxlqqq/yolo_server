@@ -24,6 +24,8 @@ add_executable(storage_server
     src/common/logger/Logger.cpp
     src/common/config/Config.cpp
     src/server/Connection.cpp
+    src/server/Protocol.cpp
+    src/server/Dispatcher.cpp
 )
 
 # =========================
@@ -35,6 +37,8 @@ set(SERVER_SOURCES
     src/common/logger/Logger.cpp
     src/common/config/Config.cpp
     src/server/Connection.cpp
+    src/server/Protocol.cpp
+    src/server/Dispatcher.cpp
 )
 
 # =========================

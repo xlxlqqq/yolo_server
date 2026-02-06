@@ -1,6 +1,7 @@
 #include "server/Connection.h"
 #include "common/logger/Logger.h"
 #include "server/Protocol.h"
+#include "server/Dispatcher.h"
 
 #include <unistd.h>
 #include <sys/socket.h>
@@ -23,20 +24,18 @@ void Connection::start() {
 void Connection::handle() {
     LOG_INFO("client connected");
 
-    while (true) {
-        std::vector<char> msg;
-        if (!server::Protocol::recvMessage(m_fd, msg)) {
-            break;
-        }
+    std::vector<char> msg;
 
-        // 👉 这里以后接 YOLO / JSON / 命令
-        LOG_INFO("received message size={}", msg.size());
+    while (Protocol::recvMessage(m_fd, msg)) {
+        std::string request(msg.begin(), msg.end());
 
-        // echo 回去（完整消息）
-        server::Protocol::sendMessage(m_fd, msg);
+        std::string response = Dispatcher::dispatch(request);
+
+        std::vector<char> out(response.begin(), response.end());
+        Protocol::sendMessage(m_fd, out);
     }
 
-    LOG_INFO("client disconnected");
+    close(m_fd);
 }
 
 };

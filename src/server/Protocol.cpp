@@ -18,33 +18,28 @@ static bool recvAll(int fd, void* buf, size_t len) {
 }
 
 bool Protocol::recvMessage(int fd, std::vector<char>& out) {
-    uint32_t netLen = 0;
-    if (!recvAll(fd, &netLen, sizeof(netLen))) {
-        return false;
-    }
+    uint32_t len_net;
+    ssize_t n = recv(fd, &len_net, sizeof(len_net), MSG_WAITALL);
+    if (n <= 0) return false;
 
-    uint32_t len = ntohl(netLen);
-    if (len == 0 || len > 10 * 1024 * 1024) { // 防炸内存
-        return false;
-    }
+    uint32_t len = ntohl(len_net);
+    if (len == 0 || len > 1024 * 1024) return false; // 防御式编程
 
     out.resize(len);
-    return recvAll(fd, out.data(), len);
+    n = recv(fd, out.data(), len, MSG_WAITALL);
+    return n == (ssize_t)len;
 }
 
 bool Protocol::sendMessage(int fd, const std::vector<char>& data) {
     uint32_t len = data.size();
-    uint32_t netLen = htonl(len);
+    uint32_t len_net = htonl(len);
 
-    if (send(fd, &netLen, sizeof(netLen), 0) != sizeof(netLen)) {
+    if (send(fd, &len_net, sizeof(len_net), 0) != sizeof(len_net))
         return false;
-    }
 
-    if (len > 0) {
-        if (send(fd, data.data(), len, 0) != (ssize_t)len) {
-            return false;
-        }
-    }
+    if (send(fd, data.data(), data.size(), 0) != (ssize_t)data.size())
+        return false;
+
     return true;
 }
 
