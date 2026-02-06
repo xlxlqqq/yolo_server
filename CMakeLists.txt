@@ -27,6 +27,7 @@ add_executable(storage_server
     src/server/Protocol.cpp
     src/server/Dispatcher.cpp
     src/server/Command.cpp
+    src/storage/YoloStorage.cpp
 )
 
 # =========================
@@ -41,6 +42,7 @@ set(SERVER_SOURCES
     src/server/Protocol.cpp
     src/server/Dispatcher.cpp
     src/server/Command.cpp
+    src/storage/YoloStorage.cpp
 )
 
 # =========================

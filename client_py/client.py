@@ -1,29 +1,40 @@
 import socket
+import json
 import struct
 
-def send_msg(sock, data: bytes):
-    sock.sendall(struct.pack("!I", len(data)) + data)
+data = {
+    "image_id": "img_001",
+    "width": 1280,
+    "height": 720,
+    "image_hash": "abc123",
+    "boxes": [
+        {
+            "class_id": 0,
+            "x": 0.5,
+            "y": 0.5,
+            "w": 0.2,
+            "h": 0.3,
+            "confidence": 0.9
+        }
+    ]
+}
 
-def recv_msg(sock):
-    hdr = sock.recv(4)
-    if not hdr:
-        return None
-    length = struct.unpack("!I", hdr)[0]
-    return sock.recv(length)
+payload = ("STORE " + json.dumps(data)).encode()
 
-sock = socket.socket()
-sock.connect(("127.0.0.1", 8080))
+msg = struct.pack("!I", len(payload)) + payload
 
-send_msg(sock, b"hello server")
-reply = recv_msg(sock)
-print(reply.decode())
+s = socket.socket()
+s.connect(("127.0.0.1", 8080))
+s.sendall(msg)
 
-send_msg(sock, b'{"cmd":"ping"}')
-print(recv_msg(sock).decode())
+resp_len = struct.unpack("!I", s.recv(4))[0]
+resp = s.recv(resp_len)
+print(resp.decode())
 
-send_msg(sock, b'PING')
-print(recv_msg(sock).decode())
+payload = ("GET " + "img_001").encode()
+msg = struct.pack("!I", len(payload)) + payload
+s.sendall(msg)
 
-send_msg(sock, b'STORE test 5 \n')
-print(recv_msg(sock).decode())
-
+resp_len = struct.unpack("!I", s.recv(4))[0]
+resp = s.recv(resp_len)
+print(resp.decode())

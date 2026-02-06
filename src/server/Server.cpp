@@ -12,6 +12,7 @@
 #include <cstring>
 
 namespace server {
+    
 Server::Server() : m_running(false) {
     m_port = config::Config::instance().getInt("server.port", 9000);
 }

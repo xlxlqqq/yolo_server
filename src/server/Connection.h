@@ -18,7 +18,7 @@ private:
     void handlePing();
     void handleUnknown(const std::string& msg);
     void handleStore(const std::string& msg);
-    void handleGet(const std::string& msg);
+    void handleGet(const std::string& msg) const ;
 
 private:
     int m_fd;

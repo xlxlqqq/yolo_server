@@ -35,3 +35,15 @@ Server
                 └── Connection(fd)
                      └── start()
                           └── recv/send/close
+
+### store Payload
+{
+  "image_id": "img_0001",
+  "width": 1920,
+  "height": 1080,
+  "image_hash": "a1b2c3d4...",
+  "boxes": [
+    { "cls": 0, "x": 0.52, "y": 0.33, "w": 0.12, "h": 0.18, "conf": 0.94 },
+    { "cls": 2, "x": 0.22, "y": 0.61, "w": 0.08, "h": 0.10, "conf": 0.88 }
+  ]
+}
