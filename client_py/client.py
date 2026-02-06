@@ -20,3 +20,9 @@ print(reply.decode())
 
 send_msg(sock, b'{"cmd":"ping"}')
 print(recv_msg(sock).decode())
+
+send_msg(sock, b'{cmd: ping}')
+print(recv_msg(sock).decode())
+
+send_msg(sock, b'{}')
+print(recv_msg(sock).decode())

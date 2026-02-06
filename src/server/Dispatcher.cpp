@@ -1,5 +1,9 @@
 #include "Dispatcher.h"
+
+#include <nlohmann/json.hpp>
 #include <string>
+
+using json = nlohmann::json;
 
 namespace server {
 
@@ -18,19 +22,41 @@ static std::string getCmd(const std::string& req) {
     return req.substr(pos + 1, end - pos - 1);
 }
 
-// 简单的 Dispatcher 实现
 std::string Dispatcher::dispatch(const std::string& request) {
-    std::string cmd = getCmd(request);
+    try {
+        json req = json::parse(request);
 
-    if (cmd == "ping") {
-        return R"({"status":"ok","data":"pong"})";
+        if (!req.contains("cmd")) {
+            return R"({"status":"error","msg":"missing cmd"})";
+        }
+
+        std::string cmd = req["cmd"];
+
+        if (cmd == "ping") {
+            return json{
+                {"status", "ok"},
+                {"data", "pong"}
+            }.dump();
+        }
+
+        if (cmd == "echo") {
+            return json{
+                {"status", "ok"},
+                {"data", req.value("data", "")}
+            }.dump();
+        }
+
+        return json{
+            {"status", "error"},
+            {"msg", "unknown command"}
+        }.dump();
+
+    } catch (const std::exception& e) {
+        return json{
+            {"status", "error"},
+            {"msg", std::string("invalid json: ") + e.what()}
+        }.dump();
     }
-
-    if (cmd == "echo") {
-        return request; // 先简单 echo 原请求
-    }
-
-    return R"({"status":"error","msg":"unknown command"})";
 }
 
 
