@@ -13,6 +13,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
+
 using json = nlohmann::json;
 
 namespace server {
@@ -121,6 +122,7 @@ void Connection::handleStore(const std::string& msg) {
         }
 
         const auto& node = m_router.pickNode(frame.image_id);
+        LOG_INFO("self.id={}, picked node.id={}", m_self.id, node.id);
 
         if (node.id != m_self.id) {
             forwardToNode(node, msg);
@@ -205,11 +207,44 @@ void Connection::forwardToNode(
     const cluster::NodeInfo& node, 
     const std::string& msg) {
         
-    LOG_INFO("forwarding to node {} {}: {}", node.id, node.host, node.port);
+    LOG_INFO("forwarding request to node {} ({}:{})",
+             node.id, node.host, node.port);
 
-    std::string reply = "FORWARDED";
-    Protocol::sendMessage(m_fd,
-        std::vector<char>(reply.begin(), reply.end()));
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        LOG_ERROR("socket creation failed");
+        return;
+    }
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(node.port);
+
+    if (inet_pton(AF_INET, node.host.c_str(), &addr.sin_addr) <= 0) {
+        LOG_ERROR("invalid node host: {}", node.host);
+        close(fd);
+        return;
+    }
+
+    if (connect(fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
+        LOG_ERROR("connect to node {}:{} failed", node.host, node.port);
+        close(fd);
+        return;
+    }
+
+    std::vector<char> reply;
+    if (!Protocol::recvMessage(fd, reply)) {
+        LOG_ERROR("failed to receive reply from node {}", node.id);
+        close(fd);
+        return;
+    }
+
+    close(fd);
+
+    // 6. 回写给原客户端
+    Protocol::sendMessage(m_fd, reply);
+
+    LOG_INFO("request forwarded to node {} done", node.id);
 }
 
 };

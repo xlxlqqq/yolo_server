@@ -15,16 +15,29 @@ namespace server {
     
 // TODO: 从配置文件加载集群节点信息
 Server::Server()
-    : m_running(false),
-      m_router({
-          {"node1", "127.0.0.1", 8080},
-          {"node2", "127.0.0.1", 8081}
-      }) {
+    : m_running(false), m_router({}) {
     m_port = config::Config::instance().getInt("server.port", 9000);
 
-    m_self.id = "node-1";
-    m_self.host = "127.0.0.1";
+    m_self.id = config::Config::instance().getString("server.id");
+    m_self.host = config::Config::instance().getString("server.host");
     m_self.port = m_port;
+
+    size_t node_count = config::Config::instance().getInt("nodes.count", 0);
+    std::vector<cluster::NodeInfo> nodes;
+    for (size_t i = 0; i < node_count; ++i) {
+        std::string prefix = "node" + std::to_string(i + 1);
+        LOG_INFO("loading node config: {}", prefix);
+        cluster::NodeInfo node;
+        node.id = config::Config::instance().getString(prefix + ".id");
+        node.host = config::Config::instance().getString(prefix + ".host");
+        node.port = config::Config::instance().getInt(prefix + ".port");
+
+        if(m_router.insertNode(node)) {
+            LOG_INFO("{} added to router, now nodes count {}", node.id, m_router.getNodeCount());
+        } else {
+            LOG_WARN("{} already exists in router, now nodes count {}", node.id, m_router.getNodeCount());
+        }
+    }
 
 }
 

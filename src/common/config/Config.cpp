@@ -67,6 +67,7 @@ bool Config::getBool(const std::string& key, bool defaultValue) const {
     return defaultValue;
 }
 
+// 从conf文件加载server配置
 bool Config::loadFromFile(const std::string& path) {
     std::ifstream ifs(path);
     if (!ifs.is_open()) {

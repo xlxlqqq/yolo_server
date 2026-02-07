@@ -24,5 +24,14 @@ const NodeInfo& ShardRouter::pickNode(const std::string& key) const {
     return *best_node;
 }
 
+bool ShardRouter::insertNode(const NodeInfo& node) {
+    for (const auto& n : m_nodes) {
+        if (n.id == node.id) {
+            return false;  // 已存在
+        }
+    }
+    m_nodes.push_back(node);
+    return true;
+}
 
 }  // namespace cluster

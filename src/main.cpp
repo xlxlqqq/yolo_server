@@ -3,6 +3,7 @@
 #include "common/config/Config.h"
 
 #include <csignal>
+#include <unordered_map>
 
 using namespace config;
 
@@ -39,6 +40,8 @@ int main(int argc, char* argv[]) {
 
     auto config_path = parseConfigPath(argc, argv);
     LOG_INFO("using config file: {}", config_path);
+
+    std::unordered_map<std::string, std::string> config_data;
     if (!config::Config::instance().loadFromFile(config_path)) {
         LOG_ERROR("failed to load config, exit");
         return 1;
