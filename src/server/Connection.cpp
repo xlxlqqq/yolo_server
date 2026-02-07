@@ -125,11 +125,11 @@ void Connection::handleStore(const std::string& msg) {
         LOG_INFO("self.id={}, picked node.id={}", m_self.id, node.id);
 
         if (node.id != m_self.id) {
-            forwardToNode(node, msg);
+            forwardToNode(node, msg);  // 转发到目标节点处理
             return;
         }
         
-        // temp: 直接存储到本地
+        // 否则直接存储到本地
         storage::YoloStorage::instance().store(frame);
 
         std::string reply = "STORE OK";
@@ -163,6 +163,14 @@ void Connection::handleGet(const std::string& msg) const {
         std::string reply = "ERROR missing image_id";
         Protocol::sendMessage(m_fd,
             std::vector<char>(reply.begin(), reply.end()));
+        return;
+    }
+
+    const auto& node = m_router.pickNode(image_id);
+    LOG_INFO("self.id={}, picked node.id={}", m_self.id, node.id);
+
+    if (node.id != m_self.id) {
+        forwardToNode(node, msg);
         return;
     }
 
@@ -202,19 +210,21 @@ void Connection::handleGet(const std::string& msg) const {
     LOG_INFO("GET success: {}", image_id);
 }
 
-// TODO: 实际转发时需要建立到目标节点的连接，并进行存储
+// TODO: 实际转发时需要建立到目标节点的连接
 void Connection::forwardToNode(
     const cluster::NodeInfo& node, 
-    const std::string& msg) {
+    const std::string& msg) const {
         
-    LOG_INFO("forwarding request to node {} ({}:{})",
+    LOG_INFO("forwarding request to {} ({}:{})",
              node.id, node.host, node.port);
 
     int fd = socket(AF_INET, SOCK_STREAM, 0);
+    
     if (fd < 0) {
         LOG_ERROR("socket creation failed");
         return;
     }
+    LOG_INFO("new socket fd: {}, local fd {}", fd, m_fd);
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -227,10 +237,13 @@ void Connection::forwardToNode(
     }
 
     if (connect(fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        LOG_ERROR("connect to node {}:{} failed", node.host, node.port);
+        LOG_ERROR("connect to {}:{} failed", node.host, node.port);
         close(fd);
         return;
     }
+
+    LOG_INFO("now send msg: {} to {}", msg, node.id);
+    Protocol::sendMessage(fd, std::vector<char>(msg.begin(), msg.end()));
 
     std::vector<char> reply;
     if (!Protocol::recvMessage(fd, reply)) {

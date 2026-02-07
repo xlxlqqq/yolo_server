@@ -26,7 +26,7 @@ private:
     void handleStore(const std::string& msg);
     void handleGet(const std::string& msg) const ;
 
-    void forwardToNode(const cluster::NodeInfo& node, const std::string& msg);
+    void forwardToNode(const cluster::NodeInfo& node, const std::string& msg) const;
 
 private:
     int m_fd;
