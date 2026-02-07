@@ -13,8 +13,19 @@
 
 namespace server {
     
-Server::Server() : m_running(false) {
+// TODO: 从配置文件加载集群节点信息
+Server::Server()
+    : m_running(false),
+      m_router({
+          {"node1", "127.0.0.1", 8080},
+          {"node2", "127.0.0.1", 8081}
+      }) {
     m_port = config::Config::instance().getInt("server.port", 9000);
+
+    m_self.id = "node-1";
+    m_self.host = "127.0.0.1";
+    m_self.port = m_port;
+
 }
 
 Server::~Server() {
@@ -102,8 +113,8 @@ void Server::acceptLoop() {
         int client_fd = accept(m_listen_fd, nullptr, nullptr);
         if (client_fd < 0) continue;
 
-        std::thread([client_fd]() {
-            server::Connection conn(client_fd);
+        std::thread([this, client_fd]() {
+            server::Connection conn(client_fd, m_router, m_self);
             conn.start();
         }).detach();
     }

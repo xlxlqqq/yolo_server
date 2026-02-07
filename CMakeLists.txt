@@ -28,6 +28,7 @@ add_executable(storage_server
     src/server/Dispatcher.cpp
     src/server/Command.cpp
     src/storage/YoloStorage.cpp
+    src/cluster/ShardRouter.cpp
 )
 
 # =========================

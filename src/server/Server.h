@@ -1,6 +1,10 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
+
+#include "cluster/NodeInfo.h"
+#include "cluster/ShardRouter.h"
 
 namespace server {
 
@@ -16,6 +20,9 @@ public:
 
     bool isRunning() const;
 
+    cluster::ShardRouter& router() { return m_router; }
+    const cluster::NodeInfo& self() const { return m_self; }
+
 private:
     std::atomic<bool> m_running;
 
@@ -24,6 +31,10 @@ private:
 
     int m_listen_fd{-1};
     int m_port{8080};
+
+    cluster::NodeInfo m_self;
+    cluster::ShardRouter m_router;
+
 };
 
 };  // namespace server

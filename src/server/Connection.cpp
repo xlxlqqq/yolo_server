@@ -17,7 +17,10 @@ using json = nlohmann::json;
 
 namespace server {
 
-Connection::Connection(int fd) : m_fd(fd) {}
+Connection::Connection(int fd, cluster::ShardRouter& router, const cluster::NodeInfo& self)
+    : m_fd(fd),
+        m_router(router),
+        m_self(self) {}
 
 Connection::~Connection() {
     if (m_fd >= 0) {
@@ -117,6 +120,14 @@ void Connection::handleStore(const std::string& msg) {
             frame.boxes.push_back(box);
         }
 
+        const auto& node = m_router.pickNode(frame.image_id);
+
+        if (node.id != m_self.id) {
+            forwardToNode(node, msg);
+            return;
+        }
+        
+        // temp: 直接存储到本地
         storage::YoloStorage::instance().store(frame);
 
         std::string reply = "STORE OK";
@@ -187,6 +198,18 @@ void Connection::handleGet(const std::string& msg) const {
         std::vector<char>(reply.begin(), reply.end()));
 
     LOG_INFO("GET success: {}", image_id);
+}
+
+// TODO: 实际转发时需要建立到目标节点的连接，并进行存储
+void Connection::forwardToNode(
+    const cluster::NodeInfo& node, 
+    const std::string& msg) {
+        
+    LOG_INFO("forwarding to node {} {}: {}", node.id, node.host, node.port);
+
+    std::string reply = "FORWARDED";
+    Protocol::sendMessage(m_fd,
+        std::vector<char>(reply.begin(), reply.end()));
 }
 
 };
