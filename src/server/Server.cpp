@@ -2,6 +2,7 @@
 #include "common/logger/Logger.h"
 #include "common/config/Config.h"
 #include "server/Connection.h"
+#include "cluster/ShardRouter.h"
 
 #include <thread>
 #include <chrono>
@@ -36,9 +37,14 @@ Server::Server()
         node.id = config::Config::instance().getString(prefix + ".id");
         node.host = config::Config::instance().getString(prefix + ".host");
         node.port = config::Config::instance().getInt(prefix + ".port");
+        if (m_self.id == node.id) {
+            LOG_INFO("skip self node config: {}", node.id);
+            continue;
+        }
+        node.healthy = cluster::checkNodeHealth(node);
 
         if(m_router.insertNode(node)) {
-            LOG_INFO("{} added to router, now nodes count {}", node.id, m_router.getNodeCount());
+            LOG_INFO("{} added to router, now healthy nodes count {}", node.id, m_router.getNodeCount());
         } else {
             LOG_WARN("{} already exists in router, now nodes count {}", node.id, m_router.getNodeCount());
         }

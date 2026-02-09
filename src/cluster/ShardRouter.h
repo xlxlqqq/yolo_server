@@ -19,7 +19,11 @@ public:
 private:
     std::vector<NodeInfo> m_nodes;
 
+    bool isNodeHealthy(const NodeInfo& node) const;
+
 };  // class ShardRouter
+
+bool checkNodeHealth(const NodeInfo& node);
 
 
 }  // namespace cluster
