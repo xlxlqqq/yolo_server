@@ -26,7 +26,10 @@ private:
     void handleStore(const std::string& msg);
     void handleGet(const std::string& msg) const ;
 
-    void forwardToNode(const cluster::NodeInfo& node, const std::string& msg) const;
+    int forwardToNode(const cluster::NodeInfo& node, const std::string& msg) const;
+
+    static bool connectWithRetry(int fd, const sockaddr& addr, const std::string& host,
+        int port, int maxRetries = 5, int retryDelayMs = 1000);
 
 private:
     int m_fd;

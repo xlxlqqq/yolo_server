@@ -10,6 +10,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cstring>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <poll.h>
+
 
 namespace server {
     
@@ -95,6 +100,9 @@ bool Server::setupSocket() {
         LOG_ERROR("socket create failed");
         return false;
     }
+
+    int flags = fcntl(m_listen_fd, F_GETFL, 0);
+    fcntl(m_listen_fd, F_SETFL, flags | O_NONBLOCK);
     
     // 允许端口快速复用
     int opt = 1;  
@@ -123,8 +131,30 @@ bool Server::setupSocket() {
 // 心跳
 void Server::acceptLoop() {
     while (m_running) {
+        struct pollfd pfd{};
+        pfd.fd = m_listen_fd;
+        pfd.events = POLLIN;
+        
+        int ret = poll(&pfd, 1, 1000);  // 等待1秒
+        if (ret == 0) {
+            continue;  // timeout，继续等待
+        } 
+        if (ret < 0) {
+            if (errno == EINTR) {
+                continue;  // 被信号打断，继续等待
+            }
+            LOG_ERROR("poll failed: {}", strerror(errno));
+            break;
+        }
+
         int client_fd = accept(m_listen_fd, nullptr, nullptr);
-        if (client_fd < 0) continue;
+        if (client_fd < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            }
+            LOG_ERROR("accept error: {}", strerror(errno));
+            continue;
+        }
 
         std::thread([this, client_fd]() {
             server::Connection conn(client_fd, m_router, m_self);

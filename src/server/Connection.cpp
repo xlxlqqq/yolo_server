@@ -4,6 +4,7 @@
 #include "server/Dispatcher.h"
 #include "server/Command.h"
 #include "storage/YoloStorage.h"
+#include "common/error/ErrorCode.h"
 
 #include <unistd.h>
 #include <sys/socket.h>
@@ -12,6 +13,7 @@
 #include <sstream>
 #include <vector>
 #include <nlohmann/json.hpp>
+#include <fcntl.h>
 
 
 using json = nlohmann::json;
@@ -125,8 +127,16 @@ void Connection::handleStore(const std::string& msg) {
         LOG_INFO("self.id={}, picked node.id={}", m_self.id, node.id);
 
         if (node.id != m_self.id) {
-            forwardToNode(node, msg);  // 转发到目标节点处理
-            return;
+            // 转发到目标节点处理 
+            if(forwardToNode(node, msg) == CONNECT_FAILED) {
+                LOG_ERROR("failed to forward STORE request to node {}, store failed", node.id);
+                std::string reply = "ERROR failed to forward STORE request";
+                Protocol::sendMessage(m_fd, std::vector<char>(reply.begin(), reply.end()));
+                return;
+            } else {
+                LOG_INFO("STORE request forwarded to node {} successfully", node.id);
+                return;
+            }
         }
         
         // 否则直接存储到本地
@@ -170,7 +180,14 @@ void Connection::handleGet(const std::string& msg) const {
     LOG_INFO("self.id={}, picked node.id={}", m_self.id, node.id);
 
     if (node.id != m_self.id) {
-        forwardToNode(node, msg);
+        if(forwardToNode(node, msg) == CONNECT_FAILED) {
+            LOG_ERROR("failed to forward GET request to node {}, store failed", node.id);
+            std::string reply = "ERROR failed to forward GET request";
+            Protocol::sendMessage(m_fd, std::vector<char>(reply.begin(), reply.end()));
+        } else {
+            LOG_INFO("GET request forwarded to node {} successfully", node.id);
+            
+        }
         return;
     }
 
@@ -211,7 +228,7 @@ void Connection::handleGet(const std::string& msg) const {
 }
 
 // TODO: 实际转发时需要建立到目标节点的连接
-void Connection::forwardToNode(
+int Connection::forwardToNode(
     const cluster::NodeInfo& node, 
     const std::string& msg) const {
         
@@ -219,12 +236,15 @@ void Connection::forwardToNode(
              node.id, node.host, node.port);
 
     int fd = socket(AF_INET, SOCK_STREAM, 0);
-    
     if (fd < 0) {
         LOG_ERROR("socket creation failed");
-        return;
+        return FD_FIALED;
     }
     LOG_INFO("new socket fd: {}, local fd {}", fd, m_fd);
+
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    LOG_INFO("set socket fd {} non-blocking", fd);
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -233,13 +253,15 @@ void Connection::forwardToNode(
     if (inet_pton(AF_INET, node.host.c_str(), &addr.sin_addr) <= 0) {
         LOG_ERROR("invalid node host: {}", node.host);
         close(fd);
-        return;
+        return FD_FIALED;
     }
 
-    if (connect(fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
+    bool ret = server::Connection::connectWithRetry(fd, (sockaddr&)addr, node.host, node.port);
+    // int ret = connect(fd, (sockaddr*)&addr, sizeof(addr));
+    if (!ret) {
         LOG_ERROR("connect to {}:{} failed", node.host, node.port);
         close(fd);
-        return;
+        return CONNECT_FAILED;
     }
 
     LOG_INFO("now send msg: {} to {}", msg, node.id);
@@ -249,7 +271,7 @@ void Connection::forwardToNode(
     if (!Protocol::recvMessage(fd, reply)) {
         LOG_ERROR("failed to receive reply from node {}", node.id);
         close(fd);
-        return;
+        return RECV_FAILED;
     }
 
     close(fd);
@@ -258,6 +280,28 @@ void Connection::forwardToNode(
     Protocol::sendMessage(m_fd, reply);
 
     LOG_INFO("request forwarded to node {} done", node.id);
+    return OK;
+}
+
+bool server::Connection::connectWithRetry(int fd, const sockaddr& addr, const std::string& host, int port, int maxRetries, int retryDelayMs) {
+    for (int attempt = 1; attempt <= maxRetries; ++attempt) {
+        if (connect(fd, &addr, sizeof(addr)) == 0) {
+            // 连接成功
+            return true;
+        }
+
+        // 记录错误日志
+        LOG_ERROR("Attempt {}: connect to {}:{} failed", attempt, host, port);
+
+        if (attempt < maxRetries) {
+            // 等待一段时间后重试
+            std::this_thread::sleep_for(std::chrono::milliseconds(retryDelayMs));
+        }
+    }
+
+    // 超过最大重试次数，返回失败
+    LOG_ERROR("connect to {}:{} failed after {} attempts", host, port, maxRetries);
+    return false;
 }
 
 };
