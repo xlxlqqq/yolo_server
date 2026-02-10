@@ -39,12 +39,20 @@ Server::Server()
         node.port = config::Config::instance().getInt(prefix + ".port");
         if (m_self.id == node.id) {
             LOG_INFO("skip self node config: {}", node.id);
-            continue;
+            node.healthy = true;  // 自身肯定是健康的
+        } else {
+            node.healthy = cluster::checkNodeHealth(node);
         }
-        node.healthy = cluster::checkNodeHealth(node);
+
+        if (node.healthy) {
+            LOG_INFO("node {} is healthy", node.id);
+        } else {
+            LOG_WARN("node {} is unhealthy, will not be added to router", node.id);
+            continue;  // 不健康的节点不加入路由
+        }
 
         if(m_router.insertNode(node)) {
-            LOG_INFO("{} added to router, now healthy nodes count {}", node.id, m_router.getNodeCount());
+            LOG_INFO("{} added to router, now nodes count {}", node.id, m_router.getNodeCount());
         } else {
             LOG_WARN("{} already exists in router, now nodes count {}", node.id, m_router.getNodeCount());
         }

@@ -16,6 +16,9 @@ const NodeInfo& ShardRouter::pickNode(const std::string& key) const {
     size_t best_score = 0;
     const NodeInfo* best_node = nullptr;
 
+    LOG_INFO("picking node for key: {}", key);
+    LOG_INFO("available nodes count : {}", m_nodes.size());
+
     for (const auto& node : m_nodes) {
         if (!isNodeHealthy(node)) {
             LOG_WARN("node {} is unhealthy, skipping", node.id);
@@ -30,9 +33,9 @@ const NodeInfo& ShardRouter::pickNode(const std::string& key) const {
             best_node = &node;
         }
     }
+
     if (!best_node) {
         LOG_ERROR("no healthy nodes available to route key: {}", key);
-        throw std::runtime_error("no healthy nodes available");
         // return nullptr;
     }
 
