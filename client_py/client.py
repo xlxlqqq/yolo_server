@@ -3,7 +3,7 @@ import json
 import struct
 
 data = {
-    "image_id": "img_001",
+    "image_id": "img_002",
     "width": 1280,
     "height": 720,
     "image_hash": "abc123",
@@ -32,10 +32,10 @@ resp_len = struct.unpack("!I", s.recv(4))[0]
 resp = s.recv(resp_len)
 print(resp.decode())
 
-# payload = ("GET img_002").encode()
-# s.sendall(struct.pack("!I", len(payload)) + payload)
-# resp_len = struct.unpack("!I", s.recv(4))[0]
-# resp = s.recv(resp_len)
-# print(resp.decode())
+payload = ("GET img_002").encode()
+s.sendall(struct.pack("!I", len(payload)) + payload)
+resp_len = struct.unpack("!I", s.recv(4))[0]
+resp = s.recv(resp_len)
+print(resp.decode())
 
 

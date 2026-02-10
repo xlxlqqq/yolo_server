@@ -1,8 +1,19 @@
 
 ### TODO
-分布式存储:HRW Hash + raft
+分布式存储:HRW Hash
+     Done：接入HRW hash
 分布一致性
 接入数据库存储
+     Done：使用RocksDB进行存储
+
+# 介绍
+     使用TCP搭建的YOLO storage server，用于存储yolo深度学习网络模型推理出来的结果。
+## 主要技术子系统
+     日志系统
+     分布式存储
+     分布一致性
+     网络编程
+     JSON解析
 
 # 日志系统
 - 支持fmt
@@ -41,7 +52,7 @@ Server
                           └── recv/send/close
 
 ### store Payload
-实现store接口和get接口，目前还是内存存储
+实现store接口和get接口，使用RocksDB存储
 {
   "image_id": "img_0001",
   "width": 1920,
