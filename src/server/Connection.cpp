@@ -143,9 +143,8 @@ void Connection::handleStore(const std::string& msg) {
         
         // 否则直接存储到本地
         // storage::YoloStorage::instance().store(frame);
-        storage::RocksDBStorage rocks("data/" + m_self.id + "/rocksdb/");
         std::string value = storage::encode(frame);
-        rocks.put(frame.image_id, value);
+        storage::RocksDBStorage::instance().put(frame.image_id, value);
 
         std::string reply = "STORE OK";
         Protocol::sendMessage(
@@ -196,10 +195,8 @@ void Connection::handleGet(const std::string& msg) const {
         return;
     }
 
-    storage::RocksDBStorage rocks("data/" + m_self.id + "/rocksdb/");
-
     storage::YoloFrame frame;
-    auto opt = rocks.get(image_id);
+    auto opt = storage::RocksDBStorage::instance().get(image_id);
     if (opt) {
         frame = storage::decode(*opt);
     }

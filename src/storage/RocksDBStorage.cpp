@@ -6,7 +6,18 @@
 
 namespace storage {
 
-RocksDBStorage::RocksDBStorage(const std::string& db_path) {
+RocksDBStorage& RocksDBStorage::instance() {
+    static RocksDBStorage inst;
+    return inst;
+}
+
+RocksDBStorage::RocksDBStorage() {}
+
+RocksDBStorage::~RocksDBStorage() {
+    // unique_ptr 会自动关闭 DB
+}
+
+bool RocksDBStorage::open(const std::string& db_path) {
     rocksdb::Options options;
     options.create_if_missing = true;
 
@@ -18,9 +29,9 @@ RocksDBStorage::RocksDBStorage(const std::string& db_path) {
     }
 
     m_db.reset(db);
+    return true;
 }
 
-RocksDBStorage::~RocksDBStorage() = default;
 
 bool RocksDBStorage::put(const std::string& key,
                          const std::string& value) {

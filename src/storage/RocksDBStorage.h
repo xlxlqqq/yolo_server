@@ -1,24 +1,32 @@
 #pragma once
 
-#include "storage/YoloStorage.h"
-
 #include <rocksdb/db.h>
 #include <memory>
 
 namespace storage {
 
-class RocksDBStorage : public YoloStorage {
+class RocksDBStorage {
 public:
-    explicit RocksDBStorage(const std::string& db_path);
-    ~RocksDBStorage();
+    
+    static RocksDBStorage& instance();
+
+    bool open(const std::string& path);
 
     bool put(const std::string& key,
-             const std::string& value) override;
+             const std::string& value);
 
     std::optional<std::string>
-    get(const std::string& key) override;
+    get(const std::string& key);
 
 private:
+    RocksDBStorage();
+    ~RocksDBStorage();
+
+    RocksDBStorage(const RocksDBStorage&) = delete;
+    RocksDBStorage(RocksDBStorage&&) = delete;
+    RocksDBStorage& operator=(const RocksDBStorage&) = delete;
+    RocksDBStorage& operator=(RocksDBStorage&&) = delete;
+
     std::unique_ptr<rocksdb::DB> m_db;
 };
 

@@ -3,6 +3,7 @@
 #include "common/config/Config.h"
 #include "server/Connection.h"
 #include "cluster/ShardRouter.h"
+#include "storage/RocksDBStorage.h"
 
 #include <thread>
 #include <chrono>
@@ -80,6 +81,12 @@ bool Server::init() {
 
 bool Server::start() {
     if (!setupSocket()) {
+        return false;
+    }
+
+    std::string dbpath = "data/" + m_self.id + "/rocksdb";
+    if (!storage::RocksDBStorage::instance().open(dbpath)) {
+        LOG_ERROR("open rocksdb failed");
         return false;
     }
 
