@@ -9,7 +9,7 @@ import string
 
 SERVER_ADDR = ("127.0.0.1", 8080)
 
-TOTAL_REQUESTS = 10000      # 总请求数
+TOTAL_REQUESTS = 1000      # 总请求数
 CONCURRENCY = 10           # 并发线程数
 MODE = "STORE"             # STORE / GET / MIXED
 

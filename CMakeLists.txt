@@ -43,6 +43,7 @@ add_executable(storage_server
     src/cluster/ShardRouter.cpp
     src/storage/RocksDBStorage.cpp
     src/common/codec/YoloCodec.cpp
+    src/common/thread/ThreadPool.cpp
 )
 
 # =========================
@@ -60,6 +61,7 @@ set(SERVER_SOURCES
     src/storage/YoloStorage.cpp
     src/storage/RocksDBStorage.cpp
     src/common/codec/YoloCodec.cpp
+    src/common/thread/ThreadPool.cpp
 )
 
 # =========================

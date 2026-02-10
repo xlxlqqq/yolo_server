@@ -21,7 +21,14 @@ namespace server {
     
 // TODO: 从配置文件加载集群节点信息
 Server::Server()
-    : m_running(false), m_router({}) {
+    : m_running(false), m_router({}),
+    m_thread_pool(std::thread::hardware_concurrency()) {
+
+    if (m_thread_pool.size() == 0) {
+        LOG_WARN("hardware_concurrency returned 0, fallback to 4 threads");
+    }
+    LOG_INFO("thread pool initialized with {} threads", m_thread_pool.size());
+
     m_port = config::Config::instance().getInt("server.port", 9000);
 
     m_self.id = config::Config::instance().getString("server.id");
@@ -170,10 +177,10 @@ void Server::acceptLoop() {
             continue;
         }
 
-        std::thread([this, client_fd]() {
+        m_thread_pool.submit([this, client_fd]() {
             server::Connection conn(client_fd, m_router, m_self);
             conn.start();
-        }).detach();
+        });
     }
 }
 

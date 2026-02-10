@@ -5,6 +5,7 @@
 
 #include "cluster/NodeInfo.h"
 #include "cluster/ShardRouter.h"
+#include "common/thread/ThreadPool.h"
 
 namespace server {
 
@@ -34,6 +35,8 @@ private:
 
     cluster::NodeInfo m_self;
     cluster::ShardRouter m_router;
+
+    common::ThreadPool m_thread_pool;
 
 };
 

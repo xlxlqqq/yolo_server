@@ -8,12 +8,14 @@
 
 # 介绍
      使用TCP搭建的YOLO storage server，用于存储yolo深度学习网络模型推理出来的结果。
+     目前瓶颈在文件IO上：open rocksdb failed: IO error: While lock file: data/node1/rocksdb//LOCK: No locks available
 ## 主要技术子系统
      日志系统
      分布式存储
-     分布一致性
+     分布一致性Raft
      网络编程
      JSON解析
+     线程池
 
 # 日志系统
 - 支持fmt
