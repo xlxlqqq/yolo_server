@@ -11,12 +11,24 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)   
 
+set(RocksDB_DIR "/usr/include/rocksdb")
+
 # Debug / Release 区分
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
 
 add_subdirectory(third_party/spdlog)
+
+find_path(ROCKSDB_INCLUDE_DIR
+    NAMES rocksdb/db.h
+)
+
+# 找库
+find_library(ROCKSDB_LIBRARY
+    NAMES rocksdb
+)
+
 
 add_executable(storage_server
     src/main.cpp
@@ -29,6 +41,8 @@ add_executable(storage_server
     src/server/Command.cpp
     src/storage/YoloStorage.cpp
     src/cluster/ShardRouter.cpp
+    src/storage/RocksDBStorage.cpp
+    src/common/codec/YoloCodec.cpp
 )
 
 # =========================
@@ -44,6 +58,8 @@ set(SERVER_SOURCES
     src/server/Dispatcher.cpp
     src/server/Command.cpp
     src/storage/YoloStorage.cpp
+    src/storage/RocksDBStorage.cpp
+    src/common/codec/YoloCodec.cpp
 )
 
 # =========================
@@ -53,6 +69,7 @@ target_include_directories(storage_server
     PRIVATE
         ${PROJECT_SOURCE_DIR}/src
         ${PROJECT_SOURCE_DIR}/third_party/spdlog/include
+        /usr/include/rocksdb
 )
 
 include_directories(${PROJECT_SOURCE_DIR}/third_party)
@@ -65,3 +82,7 @@ target_link_libraries(storage_server
     PRIVATE
         spdlog
 )
+
+target_include_directories(storage_server PRIVATE ${ROCKSDB_INCLUDE_DIR})
+target_link_libraries(storage_server PRIVATE ${ROCKSDB_LIBRARY})
+

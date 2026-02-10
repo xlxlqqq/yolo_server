@@ -33,6 +33,7 @@ const NodeInfo& ShardRouter::pickNode(const std::string& key) const {
     if (!best_node) {
         LOG_ERROR("no healthy nodes available to route key: {}", key);
         throw std::runtime_error("no healthy nodes available");
+        // return nullptr;
     }
 
     return *best_node;

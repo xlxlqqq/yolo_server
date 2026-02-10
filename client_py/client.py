@@ -25,16 +25,17 @@ msg = struct.pack("!I", len(payload)) + payload
 
 s = socket.socket()
 s.connect(("127.0.0.1", 8080))
-s.sendall(msg)
 
+
+s.sendall(msg)
 resp_len = struct.unpack("!I", s.recv(4))[0]
 resp = s.recv(resp_len)
 print(resp.decode())
 
-payload = ("GET " + "img_001").encode()
-msg = struct.pack("!I", len(payload)) + payload
-s.sendall(msg)
+# payload = ("GET img_002").encode()
+# s.sendall(struct.pack("!I", len(payload)) + payload)
+# resp_len = struct.unpack("!I", s.recv(4))[0]
+# resp = s.recv(resp_len)
+# print(resp.decode())
 
-resp_len = struct.unpack("!I", s.recv(4))[0]
-resp = s.recv(resp_len)
-print(resp.decode())
+

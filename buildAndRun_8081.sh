@@ -10,7 +10,7 @@ PROJECT_ROOT="$(realpath "${SCRIPT_DIR}/.")"
 
 BUILD_DIR="${PROJECT_ROOT}/build"
 BIN="${BUILD_DIR}/storage_server"
-CONFIG1="${PROJECT_ROOT}/config/server_8080.conf"
+CONFIG1="${PROJECT_ROOT}/config/server_8081.conf"
 
 echo "[INFO] script path   : ${SCRIPT_PATH}"
 echo "[INFO] project root  : ${PROJECT_ROOT}"

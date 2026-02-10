@@ -2,7 +2,7 @@
 
 #include "YoloTypes.h"
 
-#include <unordered_map>
+#include <string>
 #include <mutex>
 #include <optional>
 
@@ -15,18 +15,13 @@ struct StoreRequest {
 
 class YoloStorage {
 public:
-    static YoloStorage& instance();
+    virtual ~YoloStorage() = default;
 
-    bool store(const YoloFrame& frame);
-    std::optional<YoloFrame> get(const std::string& image_id) const;
+    virtual bool put(const std::string& key,
+                     const std::string& value) = 0;
 
-private:
-    YoloStorage() = default;
-    ~YoloStorage() = default;
-
-    mutable std::mutex m_mutex;
-    std::unordered_map<std::string, YoloFrame> m_frames;
-
+    virtual std::optional<std::string>
+    get(const std::string& key) = 0;
 
 };  // class YoloStore
 
