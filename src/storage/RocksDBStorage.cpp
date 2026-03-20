@@ -3,6 +3,7 @@
 
 #include <rocksdb/options.h>
 #include <rocksdb/status.h>
+#include <filesystem>
 
 namespace storage {
 
@@ -18,6 +19,14 @@ RocksDBStorage::~RocksDBStorage() {
 }
 
 bool RocksDBStorage::open(const std::string& db_path) {
+    // 确保数据库所在的父目录存在
+    try {
+        std::filesystem::path path(db_path);
+        std::filesystem::create_directories(path.parent_path());
+    } catch (const std::exception& e) {
+        LOG_ERROR("failed to create directories for rocksdb: {}", e.what());
+    }
+
     rocksdb::Options options;
     options.create_if_missing = true;
 

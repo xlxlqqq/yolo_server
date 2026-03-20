@@ -1,7 +1,11 @@
 #pragma once
 
+#include "YoloStorage.h"
+
 #include <rocksdb/db.h>
 #include <memory>
+#include <string>
+#include <optional>
 
 namespace storage {
 
