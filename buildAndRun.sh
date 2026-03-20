@@ -24,7 +24,7 @@ cd "${BUILD_DIR}"
 cmake ..
 # 降低并发编译数量，防止内存不足(OOM)导致编译被 Kill
 # 如果依然 OOM，说明内存非常有限，改为单线程编译
-make
+make -j2
 
 # ===== 运行 =====
 exec "${BIN}" --config "${CONFIG1}"

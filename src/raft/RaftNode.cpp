@@ -1,6 +1,7 @@
 #include "RaftNode.h"
 #include "common/logger/Logger.h"
 #include "server/Protocol.h"
+#include "storage/RocksDBStorage.h"
 
 #include <random>
 #include <chrono>
@@ -185,7 +186,8 @@ void RaftNode::heartbeatLoop() {
                             if (newCommitIndex > m_commitIndex && m_logs[newCommitIndex].term == m_currentTerm) {
                                 m_commitIndex = newCommitIndex;
                                 LOG_INFO("Leader {} updated commitIndex to {}", m_nodeId, m_commitIndex);
-                                // TODO: 将 commitIndex 应用到状态机(RocksDB)
+                                // 应用已提交的日志到状态机
+                                applyCommittedLogs();
                             }
                         } else if (reply.term > m_currentTerm) {
                             // 发现更大的任期，退回 Follower
@@ -496,7 +498,8 @@ AppendEntriesReply RaftNode::handleAppendEntries(const AppendEntriesArgs& args) 
     if (args.leaderCommit > m_commitIndex) {
         m_commitIndex = std::min(args.leaderCommit, m_logs.back().index);
         LOG_INFO("Updated commitIndex to {}", m_commitIndex);
-        // TODO: 将 commitIndex 应用到状态机(RocksDB)
+        // 应用已提交的日志到状态机
+        applyCommittedLogs();
     }
 
     reply.success = true;
@@ -521,6 +524,23 @@ bool RaftNode::submitLog(const std::string& key, const std::string& value) {
     
     // 下一次 heartbeatLoop 会把这条日志通过 AppendEntries 同步出去
     return true;
+}
+
+void RaftNode::applyCommittedLogs() {
+    // 应用所有已提交但尚未应用的日志
+    while (m_lastApplied < m_commitIndex) {
+        m_lastApplied++;
+        const auto& entry = m_logs[m_lastApplied];
+        
+        // 将日志应用到 RocksDB
+        if (!storage::RocksDBStorage::instance().put(entry.key, entry.value)) {
+            LOG_ERROR("Failed to apply log entry [index={}, term={}, key={}] to RocksDB", 
+                      entry.index, entry.term, entry.key);
+        } else {
+            LOG_INFO("Applied log entry [index={}, term={}, key={}] to RocksDB", 
+                     entry.index, entry.term, entry.key);
+        }
+    }
 }
 
 } // namespace raft

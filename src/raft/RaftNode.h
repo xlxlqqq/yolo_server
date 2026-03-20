@@ -46,6 +46,9 @@ private:
     // 网络通信相关
     bool sendRequestVote(const std::string& peerId, const RequestVoteArgs& args, RequestVoteReply& reply);
     bool sendAppendEntries(const std::string& peerId, const AppendEntriesArgs& args, AppendEntriesReply& reply);
+    
+    // 状态机应用
+    void applyCommittedLogs();
 
 private:
     std::string m_nodeId;
