@@ -98,6 +98,14 @@ bool Server::start() {
         }
     }
     m_raft_node = std::make_shared<raft::RaftNode>(m_self.id, peer_ids);
+    
+    // 设置节点地址映射
+    for (const auto& node : m_router.getAllNodes()) {
+        if (node.id != m_self.id) {
+            m_raft_node->setPeerAddress(node.id, node.host, node.port);
+        }
+    }
+    
     m_raft_node->start();
 
     m_running = true;

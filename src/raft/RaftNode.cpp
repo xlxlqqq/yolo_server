@@ -1,8 +1,16 @@
 #include "RaftNode.h"
 #include "common/logger/Logger.h"
+#include "server/Protocol.h"
 
 #include <random>
 #include <chrono>
+#include <nlohmann/json.hpp>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+using json = nlohmann::json;
 
 namespace raft {
 
@@ -58,6 +66,12 @@ void RaftNode::resetElectionTimer() {
     m_lastHeartbeatTime = std::chrono::steady_clock::now();
 }
 
+void RaftNode::setPeerAddress(const std::string& peerId, const std::string& host, int port) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_peerAddresses[peerId] = std::make_pair(host, port);
+    LOG_INFO("Set peer {} address: {}:{}", peerId, host, port);
+}
+
 void RaftNode::electionLoop() {
     while (m_running) {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -90,11 +104,41 @@ void RaftNode::startElection() {
     args.lastLogIndex = m_logs.back().index;
     args.lastLogTerm = m_logs.back().term;
 
-    // TODO: 在这里通过网络层(如 RPC/TCP) 将 args 发送给 m_peers
-    // 收到响应后统计选票。如果选票 > 节点数/2，则：
-    // m_state = RaftState::Leader;
-    // 初始化 m_nextIndex 和 m_matchIndex
-    // 立即发送一次空日志作为心跳 (AppendEntries)
+    // 发送投票请求并统计选票
+    int votes = 1; // 自己的一票
+    for (const auto& peer : m_peers) {
+        RequestVoteReply reply;
+        if (sendRequestVote(peer, args, reply)) {
+            if (reply.voteGranted) {
+                votes++;
+                LOG_INFO("Node {} received vote from {}", m_nodeId, peer);
+            } else if (reply.term > m_currentTerm) {
+                // 发现更大的任期，退回 Follower
+                m_currentTerm = reply.term;
+                m_state = RaftState::Follower;
+                m_votedFor = "";
+                LOG_INFO("Node {} found higher term {}, becoming follower", m_nodeId, reply.term);
+                return;
+            }
+        }
+    }
+
+    // 检查是否获得多数选票
+    int majority = (m_peers.size() + 1) / 2 + 1; // +1 包括自己
+    if (votes >= majority) {
+        // 成为 Leader
+        m_state = RaftState::Leader;
+        LOG_INFO("Node {} elected as leader for term {}", m_nodeId, m_currentTerm);
+        
+        // 初始化 nextIndex 和 matchIndex
+        for (const auto& peer : m_peers) {
+            m_nextIndex[peer] = m_logs.size();
+            m_matchIndex[peer] = 0;
+        }
+        
+        // 立即发送一次空日志作为心跳
+        // 心跳会在 heartbeatLoop 中处理
+    }
 }
 
 void RaftNode::heartbeatLoop() {
@@ -102,12 +146,256 @@ void RaftNode::heartbeatLoop() {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             if (m_state == RaftState::Leader) {
-                // TODO: 构造 AppendEntriesArgs 并发送给所有 Follower
-                // LOG_DEBUG("Leader {} sending heartbeats", m_nodeId);
+                // 发送心跳和日志给所有 Follower
+                for (const auto& peer : m_peers) {
+                    AppendEntriesArgs args;
+                    args.term = m_currentTerm;
+                    args.leaderId = m_nodeId;
+                    
+                    // 确定 prevLogIndex 和 prevLogTerm
+                    uint64_t nextIndex = m_nextIndex[peer];
+                    args.prevLogIndex = nextIndex - 1;
+                    args.prevLogTerm = m_logs[args.prevLogIndex].term;
+                    
+                    // 准备要发送的日志条目
+                    std::vector<LogEntry> entries;
+                    for (uint64_t i = nextIndex; i < m_logs.size(); i++) {
+                        entries.push_back(m_logs[i]);
+                    }
+                    
+                    args.leaderCommit = m_commitIndex;
+                    
+                    AppendEntriesReply reply;
+                    if (sendAppendEntries(peer, args, reply)) {
+                        if (reply.success) {
+                            // 成功，更新 nextIndex 和 matchIndex
+                            m_nextIndex[peer] = nextIndex + entries.size();
+                            m_matchIndex[peer] = m_nextIndex[peer] - 1;
+                            
+                            // 检查是否有新的日志可以提交
+                            // 找到大多数节点都已复制的最高日志索引
+                            std::vector<uint64_t> matchIndices;
+                            matchIndices.push_back(m_logs.size() - 1); // 自己的
+                            for (const auto& [p, mi] : m_matchIndex) {
+                                matchIndices.push_back(mi);
+                            }
+                            std::sort(matchIndices.begin(), matchIndices.end(), std::greater<uint64_t>());
+                            uint64_t newCommitIndex = matchIndices[(matchIndices.size() - 1) / 2];
+                            
+                            if (newCommitIndex > m_commitIndex && m_logs[newCommitIndex].term == m_currentTerm) {
+                                m_commitIndex = newCommitIndex;
+                                LOG_INFO("Leader {} updated commitIndex to {}", m_nodeId, m_commitIndex);
+                                // TODO: 将 commitIndex 应用到状态机(RocksDB)
+                            }
+                        } else if (reply.term > m_currentTerm) {
+                            // 发现更大的任期，退回 Follower
+                            m_currentTerm = reply.term;
+                            m_state = RaftState::Follower;
+                            m_votedFor = "";
+                            LOG_INFO("Leader {} found higher term {}, becoming follower", m_nodeId, reply.term);
+                            break;
+                        } else {
+                            // 日志不匹配，回退 nextIndex 并重试
+                            if (m_nextIndex[peer] > 1) {
+                                m_nextIndex[peer]--;
+                                LOG_DEBUG("Leader {} decremented nextIndex for {} to {}", m_nodeId, peer, m_nextIndex[peer]);
+                            }
+                        }
+                    }
+                }
             }
         }
         // 心跳间隔通常小于选举超时下限，比如 50ms
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
+
+bool RaftNode::sendRequestVote(const std::string& peerId, const RequestVoteArgs& args, RequestVoteReply& reply) {
+    auto it = m_peerAddresses.find(peerId);
+    if (it == m_peerAddresses.end()) {
+        LOG_WARN("No address for peer {}", peerId);
+        return false;
+    }
+    
+    const auto& [host, port] = it->second;
+    
+    // 创建 socket
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        LOG_ERROR("socket creation failed");
+        return false;
+    }
+    
+    // 设置非阻塞
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    
+    // 连接到 peer
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    
+    if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) <= 0) {
+        LOG_ERROR("invalid peer host: {}", host);
+        close(fd);
+        return false;
+    }
+    
+    // 连接（带重试）
+    bool connected = false;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (connect(fd, (sockaddr*)&addr, sizeof(addr)) == 0) {
+            connected = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    
+    if (!connected) {
+        LOG_ERROR("connect to {}:{} failed", host, port);
+        close(fd);
+        return false;
+    }
+    
+    // 构建请求消息
+    json j_args = {
+        {"term", args.term},
+        {"candidateId", args.candidateId},
+        {"lastLogIndex", args.lastLogIndex},
+        {"lastLogTerm", args.lastLogTerm}
+    };
+    
+    std::string msg = "RAFT_REQUEST_VOTE " + j_args.dump();
+    
+    // 发送消息
+    if (!server::Protocol::sendMessage(fd, std::vector<char>(msg.begin(), msg.end()))) {
+        LOG_ERROR("failed to send RequestVote to {}", peerId);
+        close(fd);
+        return false;
+    }
+    
+    // 接收响应
+    std::vector<char> response;
+    if (!server::Protocol::recvMessage(fd, response)) {
+        LOG_ERROR("failed to receive RequestVoteReply from {}", peerId);
+        close(fd);
+        return false;
+    }
+    
+    close(fd);
+    
+    // 解析响应
+    std::string reply_str(response.begin(), response.end());
+    size_t space_pos = reply_str.find(' ');
+    if (space_pos == std::string::npos) {
+        LOG_ERROR("invalid RequestVoteReply format");
+        return false;
+    }
+    
+    std::string reply_payload = reply_str.substr(space_pos + 1);
+    try {
+        json j_reply = json::parse(reply_payload);
+        reply.term = j_reply["term"];
+        reply.voteGranted = j_reply["voteGranted"];
+        return true;
+    } catch (const std::exception& e) {
+        LOG_ERROR("failed to parse RequestVoteReply: {}", e.what());
+        return false;
+    }
+}
+
+bool RaftNode::sendAppendEntries(const std::string& peerId, const AppendEntriesArgs& args, AppendEntriesReply& reply) {
+    auto it = m_peerAddresses.find(peerId);
+    if (it == m_peerAddresses.end()) {
+        LOG_WARN("No address for peer {}", peerId);
+        return false;
+    }
+    
+    const auto& [host, port] = it->second;
+    
+    // 创建 socket
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        LOG_ERROR("socket creation failed");
+        return false;
+    }
+    
+    // 设置非阻塞
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    
+    // 连接到 peer
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    
+    if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) <= 0) {
+        LOG_ERROR("invalid peer host: {}", host);
+        close(fd);
+        return false;
+    }
+    
+    // 连接（带重试）
+    bool connected = false;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (connect(fd, (sockaddr*)&addr, sizeof(addr)) == 0) {
+            connected = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    
+    if (!connected) {
+        LOG_ERROR("connect to {}:{} failed", host, port);
+        close(fd);
+        return false;
+    }
+    
+    // 构建请求消息
+    json j_args = {
+        {"term", args.term},
+        {"leaderId", args.leaderId},
+        {"prevLogIndex", args.prevLogIndex},
+        {"prevLogTerm", args.prevLogTerm},
+        {"leaderCommit", args.leaderCommit}
+    };
+    
+    std::string msg = "RAFT_APPEND_ENTRIES " + j_args.dump();
+    
+    // 发送消息
+    if (!server::Protocol::sendMessage(fd, std::vector<char>(msg.begin(), msg.end()))) {
+        LOG_ERROR("failed to send AppendEntries to {}", peerId);
+        close(fd);
+        return false;
+    }
+    
+    // 接收响应
+    std::vector<char> response;
+    if (!server::Protocol::recvMessage(fd, response)) {
+        LOG_ERROR("failed to receive AppendEntriesReply from {}", peerId);
+        close(fd);
+        return false;
+    }
+    
+    close(fd);
+    
+    // 解析响应
+    std::string reply_str(response.begin(), response.end());
+    size_t space_pos = reply_str.find(' ');
+    if (space_pos == std::string::npos) {
+        LOG_ERROR("invalid AppendEntriesReply format");
+        return false;
+    }
+    
+    std::string reply_payload = reply_str.substr(space_pos + 1);
+    try {
+        json j_reply = json::parse(reply_payload);
+        reply.term = j_reply["term"];
+        reply.success = j_reply["success"];
+        return true;
+    } catch (const std::exception& e) {
+        LOG_ERROR("failed to parse AppendEntriesReply: {}", e.what());
+        return false;
     }
 }
 
@@ -168,8 +456,9 @@ AppendEntriesReply RaftNode::handleAppendEntries(const AppendEntriesArgs& args) 
         return reply;
     }
 
-    // TODO: 3. 如果已经存在的日志条目和新的产生冲突（索引值相同但是任期号不同），删除这一条和之后所有的
-    // TODO: 4. 附加任何在已有的日志中不存在的条目
+    // 3. 如果已经存在的日志条目和新的产生冲突（索引值相同但是任期号不同），删除这一条和之后所有的
+    // 4. 附加任何在已有的日志中不存在的条目
+    // 注意：当前实现简化处理，没有处理日志条目，因为在心跳中暂时没有发送日志
     
     // 5. 更新提交索引
     if (args.leaderCommit > m_commitIndex) {

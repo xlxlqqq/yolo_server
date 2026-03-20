@@ -8,6 +8,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <unordered_map>
+#include <map>
 
 namespace raft {
 
@@ -28,6 +29,9 @@ public:
     // 如果当前不是 Leader，返回 false
     bool submitLog(const std::string& key, const std::string& value);
 
+    // 设置节点地址映射
+    void setPeerAddress(const std::string& peerId, const std::string& host, int port);
+
 private:
     // 后台线程：定时器循环 (用于触发选举)
     void electionLoop();
@@ -39,9 +43,16 @@ private:
     // 重置选举超时时间 (使用随机抖动)
     void resetElectionTimer();
 
+    // 网络通信相关
+    bool sendRequestVote(const std::string& peerId, const RequestVoteArgs& args, RequestVoteReply& reply);
+    bool sendAppendEntries(const std::string& peerId, const AppendEntriesArgs& args, AppendEntriesReply& reply);
+
 private:
     std::string m_nodeId;
     std::vector<std::string> m_peers;
+
+    // 节点地址映射
+    std::map<std::string, std::pair<std::string, int>> m_peerAddresses;
 
     std::mutex m_mutex;
     std::atomic<bool> m_running;
