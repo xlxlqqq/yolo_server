@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RaftTypes.h"
+#include "RaftConnectionPool.h"
 #include <string>
 #include <vector>
 #include <mutex>
@@ -9,6 +10,7 @@
 #include <condition_variable>
 #include <unordered_map>
 #include <map>
+#include <memory>
 
 namespace raft {
 
@@ -56,6 +58,9 @@ private:
 
     // 节点地址映射
     std::map<std::string, std::pair<std::string, int>> m_peerAddresses;
+    
+    // 连接池
+    std::shared_ptr<RaftConnectionPool> m_connectionPool;
 
     std::mutex m_mutex;
     std::atomic<bool> m_running;

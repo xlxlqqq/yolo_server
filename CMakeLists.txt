@@ -45,6 +45,7 @@ add_executable(storage_server
     src/common/codec/YoloCodec.cpp
     src/common/thread/ThreadPool.cpp
     src/raft/RaftNode.cpp
+    src/raft/RaftConnectionPool.cpp
 )
 
 # =========================
@@ -64,6 +65,7 @@ set(SERVER_SOURCES
     src/common/codec/YoloCodec.cpp
     src/common/thread/ThreadPool.cpp
     src/raft/RaftNode.cpp
+    src/raft/RaftConnectionPool.cpp
 )
 
 # =========================

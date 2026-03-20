@@ -23,7 +23,8 @@ RaftNode::RaftNode(const std::string& nodeId, const std::vector<std::string>& pe
       m_votedFor(""),
       m_commitIndex(0),
       m_lastApplied(0),
-      m_state(RaftState::Follower) {
+      m_state(RaftState::Follower),
+      m_connectionPool(std::make_shared<RaftConnectionPool>()) {
     
     // 初始化时加一条 dummy log，让 index 从 1 开始比较方便处理
     m_logs.push_back({0, 0, "", ""});
@@ -40,6 +41,9 @@ void RaftNode::start() {
 
     LOG_INFO("RaftNode {} starting...", m_nodeId);
 
+    // 启动连接池
+    m_connectionPool->start();
+
     m_electionThread = std::thread(&RaftNode::electionLoop, this);
     m_heartbeatThread = std::thread(&RaftNode::heartbeatLoop, this);
 }
@@ -55,6 +59,10 @@ void RaftNode::stop() {
     if (m_heartbeatThread.joinable()) {
         m_heartbeatThread.join();
     }
+    
+    // 停止连接池
+    m_connectionPool->stop();
+    
     LOG_INFO("RaftNode {} stopped.", m_nodeId);
 }
 
@@ -221,41 +229,10 @@ bool RaftNode::sendRequestVote(const std::string& peerId, const RequestVoteArgs&
     
     const auto& [host, port] = it->second;
     
-    // 创建 socket
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    // 从连接池获取连接
+    int fd = m_connectionPool->getConnection(peerId, host, port);
     if (fd < 0) {
-        LOG_ERROR("socket creation failed");
-        return false;
-    }
-    
-    // 设置非阻塞
-    int flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-    
-    // 连接到 peer
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    
-    if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) <= 0) {
-        LOG_ERROR("invalid peer host: {}", host);
-        close(fd);
-        return false;
-    }
-    
-    // 连接（带重试）
-    bool connected = false;
-    for (int attempt = 0; attempt < 3; attempt++) {
-        if (connect(fd, (sockaddr*)&addr, sizeof(addr)) == 0) {
-            connected = true;
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    
-    if (!connected) {
-        LOG_ERROR("connect to {}:{} failed", host, port);
-        close(fd);
+        LOG_ERROR("Failed to get connection for peer {}", peerId);
         return false;
     }
     
@@ -272,7 +249,7 @@ bool RaftNode::sendRequestVote(const std::string& peerId, const RequestVoteArgs&
     // 发送消息
     if (!server::Protocol::sendMessage(fd, std::vector<char>(msg.begin(), msg.end()))) {
         LOG_ERROR("failed to send RequestVote to {}", peerId);
-        close(fd);
+        m_connectionPool->releaseConnection(peerId, fd);
         return false;
     }
     
@@ -280,11 +257,12 @@ bool RaftNode::sendRequestVote(const std::string& peerId, const RequestVoteArgs&
     std::vector<char> response;
     if (!server::Protocol::recvMessage(fd, response)) {
         LOG_ERROR("failed to receive RequestVoteReply from {}", peerId);
-        close(fd);
+        m_connectionPool->releaseConnection(peerId, fd);
         return false;
     }
     
-    close(fd);
+    // 释放连接回池中
+    m_connectionPool->releaseConnection(peerId, fd);
     
     // 解析响应
     std::string reply_str(response.begin(), response.end());
@@ -315,41 +293,10 @@ bool RaftNode::sendAppendEntries(const std::string& peerId, const AppendEntriesA
     
     const auto& [host, port] = it->second;
     
-    // 创建 socket
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    // 从连接池获取连接
+    int fd = m_connectionPool->getConnection(peerId, host, port);
     if (fd < 0) {
-        LOG_ERROR("socket creation failed");
-        return false;
-    }
-    
-    // 设置非阻塞
-    int flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-    
-    // 连接到 peer
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    
-    if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) <= 0) {
-        LOG_ERROR("invalid peer host: {}", host);
-        close(fd);
-        return false;
-    }
-    
-    // 连接（带重试）
-    bool connected = false;
-    for (int attempt = 0; attempt < 3; attempt++) {
-        if (connect(fd, (sockaddr*)&addr, sizeof(addr)) == 0) {
-            connected = true;
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    
-    if (!connected) {
-        LOG_ERROR("connect to {}:{} failed", host, port);
-        close(fd);
+        LOG_ERROR("Failed to get connection for peer {}", peerId);
         return false;
     }
     
@@ -379,7 +326,7 @@ bool RaftNode::sendAppendEntries(const std::string& peerId, const AppendEntriesA
     // 发送消息
     if (!server::Protocol::sendMessage(fd, std::vector<char>(msg.begin(), msg.end()))) {
         LOG_ERROR("failed to send AppendEntries to {}", peerId);
-        close(fd);
+        m_connectionPool->releaseConnection(peerId, fd);
         return false;
     }
     
@@ -387,11 +334,12 @@ bool RaftNode::sendAppendEntries(const std::string& peerId, const AppendEntriesA
     std::vector<char> response;
     if (!server::Protocol::recvMessage(fd, response)) {
         LOG_ERROR("failed to receive AppendEntriesReply from {}", peerId);
-        close(fd);
+        m_connectionPool->releaseConnection(peerId, fd);
         return false;
     }
     
-    close(fd);
+    // 释放连接回池中
+    m_connectionPool->releaseConnection(peerId, fd);
     
     // 解析响应
     std::string reply_str(response.begin(), response.end());
