@@ -15,7 +15,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <poll.h>
+#include <sys/epoll.h>
 
 
 namespace server {
@@ -125,6 +125,11 @@ void Server::stop() {
         m_raft_node->stop();
     }
 
+    if (m_epoll_fd >= 0) {
+        close(m_epoll_fd);
+        m_epoll_fd = -1;
+    }
+
     if (m_listen_fd >= 0) {
         close(m_listen_fd);
         m_listen_fd = -1;
@@ -175,41 +180,69 @@ bool Server::setupSocket() {
         return false;
     }
 
+    // 创建 epoll 实例
+    m_epoll_fd = epoll_create1(0);
+    if (m_epoll_fd < 0) {
+        LOG_ERROR("epoll_create1 failed");
+        return false;
+    }
+
+    // 将监听 socket 添加到 epoll 中
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = m_listen_fd;
+    if (epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_listen_fd, &ev) < 0) {
+        LOG_ERROR("epoll_ctl add listen_fd failed");
+        close(m_epoll_fd);
+        return false;
+    }
+
     return true;
 }
 
 // 心跳
 void Server::acceptLoop() {
+    const int MAX_EVENTS = 64;
+    struct epoll_event events[MAX_EVENTS];
+    
     while (m_running) {
-        struct pollfd pfd{};
-        pfd.fd = m_listen_fd;
-        pfd.events = POLLIN;
-        
-        int ret = poll(&pfd, 1, 1000);  // 等待1秒
-        if (ret == 0) {
+        int nfds = epoll_wait(m_epoll_fd, events, MAX_EVENTS, 1000);  // 等待1秒
+        if (nfds == 0) {
             continue;  // timeout，继续等待
         } 
-        if (ret < 0) {
+        if (nfds < 0) {
             if (errno == EINTR) {
                 continue;  // 被信号打断，继续等待
             }
-            LOG_ERROR("poll failed: {}", strerror(errno));
+            LOG_ERROR("epoll_wait failed: {}", strerror(errno));
             break;
         }
 
-        int client_fd = accept(m_listen_fd, nullptr, nullptr);
-        if (client_fd < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                continue;
-            }
-            LOG_ERROR("accept error: {}", strerror(errno));
-            continue;
-        }
+        for (int i = 0; i < nfds; i++) {
+            if (events[i].data.fd == m_listen_fd) {
+                // 有新连接，接受所有待处理的连接
+                while (true) {
+                    int client_fd = accept(m_listen_fd, nullptr, nullptr);
+                    if (client_fd < 0) {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                            break;  // 没有更多连接了
+                        }
+                        LOG_ERROR("accept error: {}", strerror(errno));
+                        break;
+                    }
 
-        m_thread_pool.submit([this, client_fd]() {
-            server::Connection conn(client_fd, m_router, m_self, m_raft_node);
-            conn.start();
-        });
+                    // 设置非阻塞
+                    int flags = fcntl(client_fd, F_GETFL, 0);
+                    fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+
+                    // 提交到线程池处理
+                    m_thread_pool.submit([this, client_fd]() {
+                        server::Connection conn(client_fd, m_router, m_self, m_raft_node);
+                        conn.start();
+                    });
+                }
+            }
+        }
     }
 }
 

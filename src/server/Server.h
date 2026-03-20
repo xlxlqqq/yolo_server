@@ -33,6 +33,7 @@ private:
     void acceptLoop();
 
     int m_listen_fd{-1};
+    int m_epoll_fd{-1};  // epoll 文件描述符
     int m_port{8080};
 
     cluster::NodeInfo m_self;
