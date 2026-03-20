@@ -15,6 +15,7 @@ public:
     bool insertNode(const NodeInfo& node);
 
     int getNodeCount() const { return m_nodes.size(); }
+    const std::vector<NodeInfo>& getAllNodes() const { return m_nodes; }
 
 private:
     std::vector<NodeInfo> m_nodes;

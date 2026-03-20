@@ -90,6 +90,16 @@ bool Server::start() {
         return false;
     }
 
+    // 初始化并启动 RaftNode
+    std::vector<std::string> peer_ids;
+    for (const auto& node : m_router.getAllNodes()) {
+        if (node.id != m_self.id) {
+            peer_ids.push_back(node.id);
+        }
+    }
+    m_raft_node = std::make_shared<raft::RaftNode>(m_self.id, peer_ids);
+    m_raft_node->start();
+
     m_running = true;
     LOG_INFO("server listening on port {}", m_port);
 
@@ -102,6 +112,10 @@ void Server::stop() {
 
     LOG_INFO("server stopping...");
     m_running = false;
+
+    if (m_raft_node) {
+        m_raft_node->stop();
+    }
 
     if (m_listen_fd >= 0) {
         close(m_listen_fd);
@@ -185,7 +199,7 @@ void Server::acceptLoop() {
         }
 
         m_thread_pool.submit([this, client_fd]() {
-            server::Connection conn(client_fd, m_router, m_self);
+            server::Connection conn(client_fd, m_router, m_self, m_raft_node);
             conn.start();
         });
     }

@@ -44,6 +44,7 @@ add_executable(storage_server
     src/storage/RocksDBStorage.cpp
     src/common/codec/YoloCodec.cpp
     src/common/thread/ThreadPool.cpp
+    src/raft/RaftNode.cpp
 )
 
 # =========================
@@ -62,6 +63,7 @@ set(SERVER_SOURCES
     src/storage/RocksDBStorage.cpp
     src/common/codec/YoloCodec.cpp
     src/common/thread/ThreadPool.cpp
+    src/raft/RaftNode.cpp
 )
 
 # =========================

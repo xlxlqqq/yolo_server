@@ -9,6 +9,10 @@ CommandType parseCommand(const std::string& cmd) {
         return CommandType::STORE;
     } else if (cmd == "GET") {
         return CommandType::GET;
+    } else if (cmd == "RAFT_REQUEST_VOTE") {
+        return CommandType::RAFT_REQUEST_VOTE;
+    } else if (cmd == "RAFT_APPEND_ENTRIES") {
+        return CommandType::RAFT_APPEND_ENTRIES;
     } else {
         return CommandType::UNKNOWN;
     }

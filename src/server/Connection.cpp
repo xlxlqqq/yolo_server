@@ -7,6 +7,7 @@
 #include "common/error/ErrorCode.h"
 #include "common/codec/YoloCodec.h"
 #include "storage/RocksDBStorage.h"
+#include "raft/RaftNode.h" // 引入 Raft 节点
 
 #include <unistd.h>
 #include <sys/socket.h>
@@ -22,10 +23,11 @@ using json = nlohmann::json;
 
 namespace server {
 
-Connection::Connection(int fd, cluster::ShardRouter& router, const cluster::NodeInfo& self)
+Connection::Connection(int fd, cluster::ShardRouter& router, const cluster::NodeInfo& self, std::shared_ptr<raft::RaftNode> raft_node)
     : m_fd(fd),
         m_router(router),
-        m_self(self) {}
+        m_self(self),
+        m_raft_node(raft_node) {}
 
 Connection::~Connection() {
     if (m_fd >= 0) {
@@ -67,6 +69,12 @@ void Connection::handle() {
                 break;
             case CommandType::GET:
                 handleGet(msg);
+                break;
+            case CommandType::RAFT_REQUEST_VOTE:
+                handleRaftRequestVote(msg);
+                break;
+            case CommandType::RAFT_APPEND_ENTRIES:
+                handleRaftAppendEntries(msg);
                 break;
             default:
                 handleUnknown(msg);
@@ -304,4 +312,88 @@ bool server::Connection::connectWithRetry(int fd, const sockaddr& addr, const st
     return false;
 }
 
-};
+void Connection::handleRaftRequestVote(const std::string& msg) {
+    LOG_INFO("RAFT_REQUEST_VOTE received: {}", msg);
+
+    // \u683c\u5f0f: RAFT_REQUEST_VOTE {"term": 1, "candidateId": "node1", "lastLogIndex": 0, "lastLogTerm": 0}
+    auto pos = msg.find(' ');
+    if (pos == std::string::npos) {
+        std::string reply = "ERROR missing payload";
+        Protocol::sendMessage(m_fd, std::vector<char>(reply.begin(), reply.end()));
+        return;
+    }
+
+    std::string payload = msg.substr(pos + 1);
+    try {
+        json j = json::parse(payload);
+        raft::RequestVoteArgs args;
+        args.term = j["term"];
+        args.candidateId = j["candidateId"];
+        args.lastLogIndex = j["lastLogIndex"];
+        args.lastLogTerm = j["lastLogTerm"];
+
+        raft::RequestVoteReply reply;
+        if (m_raft_node) {
+            reply = m_raft_node->handleRequestVote(args);
+        } else {
+            reply.term = args.term;
+            reply.voteGranted = false;
+        }
+
+        json j_reply = {
+            {"term", reply.term},
+            {"voteGranted", reply.voteGranted}
+        };
+
+        std::string reply_str = "RAFT_REQUEST_VOTE_REPLY " + j_reply.dump();
+        Protocol::sendMessage(m_fd, std::vector<char>(reply_str.begin(), reply_str.end()));
+    } catch (const std::exception& e) {
+        LOG_WARN("RAFT_REQUEST_VOTE parse failed: {}", e.what());
+        std::string reply = "ERROR invalid payload";
+        Protocol::sendMessage(m_fd, std::vector<char>(reply.begin(), reply.end()));
+    }
+}
+
+void Connection::handleRaftAppendEntries(const std::string& msg) {
+    LOG_INFO("RAFT_APPEND_ENTRIES received: {}", msg);
+
+    auto pos = msg.find(' ');
+    if (pos == std::string::npos) {
+        std::string reply = "ERROR missing payload";
+        Protocol::sendMessage(m_fd, std::vector<char>(reply.begin(), reply.end()));
+        return;
+    }
+
+    std::string payload = msg.substr(pos + 1);
+    try {
+        json j = json::parse(payload);
+        raft::AppendEntriesArgs args;
+        args.term = j["term"];
+        args.leaderId = j["leaderId"];
+        args.prevLogIndex = j["prevLogIndex"];
+        args.prevLogTerm = j["prevLogTerm"];
+        args.leaderCommit = j["leaderCommit"];
+        
+        raft::AppendEntriesReply reply;
+        if (m_raft_node) {
+            reply = m_raft_node->handleAppendEntries(args);
+        } else {
+            reply.term = args.term;
+            reply.success = false;
+        }
+
+        json j_reply = {
+            {"term", reply.term},
+            {"success", reply.success}
+        };
+
+        std::string reply_str = "RAFT_APPEND_ENTRIES_REPLY " + j_reply.dump();
+        Protocol::sendMessage(m_fd, std::vector<char>(reply_str.begin(), reply_str.end()));
+    } catch (const std::exception& e) {
+        LOG_WARN("RAFT_APPEND_ENTRIES parse failed: {}", e.what());
+        std::string reply = "ERROR invalid payload";
+        Protocol::sendMessage(m_fd, std::vector<char>(reply.begin(), reply.end()));
+    }
+}
+
+};  // namespace server

@@ -6,6 +6,7 @@
 #include "cluster/NodeInfo.h"
 #include "cluster/ShardRouter.h"
 #include "common/thread/ThreadPool.h"
+#include "raft/RaftNode.h" // 引入 Raft 节点
 
 namespace server {
 
@@ -23,6 +24,7 @@ public:
 
     cluster::ShardRouter& router() { return m_router; }
     const cluster::NodeInfo& self() const { return m_self; }
+    std::shared_ptr<raft::RaftNode> getRaftNode() const { return m_raft_node; }
 
 private:
     std::atomic<bool> m_running;
@@ -37,6 +39,8 @@ private:
     cluster::ShardRouter m_router;
 
     common::ThreadPool m_thread_pool;
+    
+    std::shared_ptr<raft::RaftNode> m_raft_node;
 
 };
 
