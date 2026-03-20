@@ -374,6 +374,18 @@ void Connection::handleRaftAppendEntries(const std::string& msg) {
         args.prevLogTerm = j["prevLogTerm"];
         args.leaderCommit = j["leaderCommit"];
         
+        // 解析日志条目
+        if (j.contains("entries")) {
+            for (const auto& j_entry : j["entries"]) {
+                raft::LogEntry entry;
+                entry.term = j_entry["term"];
+                entry.index = j_entry["index"];
+                entry.key = j_entry["key"];
+                entry.value = j_entry["value"];
+                args.entries.push_back(entry);
+            }
+        }
+        
         raft::AppendEntriesReply reply;
         if (m_raft_node) {
             reply = m_raft_node->handleAppendEntries(args);

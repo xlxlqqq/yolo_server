@@ -357,8 +357,20 @@ bool RaftNode::sendAppendEntries(const std::string& peerId, const AppendEntriesA
         {"leaderId", args.leaderId},
         {"prevLogIndex", args.prevLogIndex},
         {"prevLogTerm", args.prevLogTerm},
-        {"leaderCommit", args.leaderCommit}
+        {"leaderCommit", args.leaderCommit},
+        {"entries", json::array()}
     };
+    
+    // 添加日志条目
+    for (const auto& entry : args.entries) {
+        json j_entry = {
+            {"term", entry.term},
+            {"index", entry.index},
+            {"key", entry.key},
+            {"value", entry.value}
+        };
+        j_args["entries"].push_back(j_entry);
+    }
     
     std::string msg = "RAFT_APPEND_ENTRIES " + j_args.dump();
     
@@ -457,12 +469,33 @@ AppendEntriesReply RaftNode::handleAppendEntries(const AppendEntriesArgs& args) 
     }
 
     // 3. 如果已经存在的日志条目和新的产生冲突（索引值相同但是任期号不同），删除这一条和之后所有的
-    // 4. 附加任何在已有的日志中不存在的条目
-    // 注意：当前实现简化处理，没有处理日志条目，因为在心跳中暂时没有发送日志
+    size_t nextIndex = args.prevLogIndex + 1;
+    size_t entryIndex = 0;
     
+    while (nextIndex < m_logs.size() && entryIndex < args.entries.size()) {
+        if (m_logs[nextIndex].term != args.entries[entryIndex].term) {
+            // 发现冲突，删除当前及之后的所有日志
+            LOG_INFO("Log conflict detected at index {}, deleting {} entries", nextIndex, m_logs.size() - nextIndex);
+            m_logs.erase(m_logs.begin() + nextIndex, m_logs.end());
+            break;
+        }
+        nextIndex++;
+        entryIndex++;
+    }
+
+    // 4. 附加任何在已有的日志中不存在的条目
+    if (entryIndex < args.entries.size()) {
+        for (size_t i = entryIndex; i < args.entries.size(); i++) {
+            const auto& entry = args.entries[i];
+            m_logs.push_back(entry);
+            LOG_INFO("Appended log entry [index={}, term={}, key={}]", entry.index, entry.term, entry.key);
+        }
+    }
+
     // 5. 更新提交索引
     if (args.leaderCommit > m_commitIndex) {
         m_commitIndex = std::min(args.leaderCommit, m_logs.back().index);
+        LOG_INFO("Updated commitIndex to {}", m_commitIndex);
         // TODO: 将 commitIndex 应用到状态机(RocksDB)
     }
 
